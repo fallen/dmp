@@ -13,4 +13,10 @@ stages during the simulation of the execution of a given binary file.
 <b>Draw Me a Pipeline</b> represents interesting wire/register values conditioning the pipeline state changes
 as well as stage inputs and outputs.
 
+Requirements: 
+
+On a Debian Squeeze machine: 
+
+    $ sudo apt-get install python2.6 python-pydot python-argparse
+
 [1] -- https://github.com/fallen/milkymist-mmu-simulation
