@@ -1,0 +1,211 @@
+#!/usr/bin/env python
+
+# Author: Yann Sionneau <yann.sionneau@gmail.com>
+# This is a first release supporting only HTML rendering
+# It is originally designed to be used with milkymist-mmu-simulation project
+# Which is a simulation of LatticeMico32 CPU using ISim simulator
+
+import sys, argparse, pydot
+
+parser = argparse.ArgumentParser(description='Draw Me a Pipeline')
+parser.add_argument('datafile')
+parser.add_argument('--tofile', default=None)
+parser.add_argument('--starttime', default=0)
+parser.add_argument('--endtime', default=10)
+parser.add_argument('--renderengine', default='html', choices=['html', 'dot'])
+
+args = parser.parse_args()
+
+print "Using renderer: " + str(args.renderengine)
+print "Start time: " + str(args.starttime)
+print "End time: " + str(args.endtime)
+
+if args.tofile == None:
+	if args.renderengine == 'html':
+		result_file_name = 'output.html'
+	elif args.renderengine == 'dot':
+		result_file_name = 'output.png'
+	else:
+		print 'Fatal error: render engine should be either HTML or DOT'
+		sys.exit(1)
+else:
+	result_file_name = args.tofile
+
+input = open(args.datafile, 'r')
+
+class LogLineParser:
+
+	def __init__(self,line):
+		self.line = line
+		# timestamp is number between [ ]
+		self.timestamp = int(line[1:].split(']')[0])
+		# action is the words after '[] '
+		self.action = line.split(']')[1][1:]
+
+	def getAction(self):
+		return self.action
+
+	def getTimestamp(self):
+		return self.timestamp
+
+	def __str__(self):
+		return self.line
+
+class Pipeline:
+	def __init__(self):
+		self.pc = {}
+		self.assignments = {}
+		self.stages = ()
+		self.timestamp = None
+		self.empty = True
+
+		self.assignments['A'] = {}
+		self.assignments['F'] = {}
+		self.assignments['D'] = {}
+		self.assignments['X'] = {}
+		self.assignments['M'] = {}
+		self.assignments['W'] = {}
+
+		self.pc['PC_A'] = ''
+		self.pc['PC_F'] = ''
+		self.pc['PC_D'] = ''
+		self.pc['PC_X'] = ''
+		self.pc['PC_M'] = ''
+		self.pc['PC_W'] = ''
+
+	def addInformation(self, logline):
+
+		if self.timestamp != None and self.timestamp != logline.getTimestamp():
+			print "ERROR : Trying to add information gathered at different timestamps in the same pipeline"
+			sys.exit(1)
+		else:
+			self.timestamp = logline.getTimestamp()
+
+		if self.isEmpty():
+			self.empty = False
+
+		words = logline.getAction().split()
+		first_word = words[0]
+		if first_word.startswith('PC_') and len(words) == 2:
+			address = words[1]
+			self.addPC(first_word, address)
+
+		if len(words) == 4 and words[1] == "<=":
+			stage_name = words[0].replace(']','').replace('[','')
+			signal_name = words[1]
+			value = words[3]
+			self.addAssignment(stage_name, signal_name, value)
+
+
+	def addPC(self, pc_name, address):
+		self.pc[pc_name] = address
+
+	def addAssignment(self, stage_name, signal_name, value):
+		self.assignments[stage_name][signal_name] = value
+
+	def isEmpty(self):
+		return self.empty
+
+def my_sort(string):
+	dict = {}
+	dict["PC_A"] = 0
+	dict["PC_F"] = 1
+	dict["PC_D"] = 2
+	dict["PC_X"] = 3
+	dict["PC_M"] = 4
+	dict["PC_W"] = 5
+	return dict['PC_' + string]
+
+def render_html(pipeline):
+	stages = sorted(pipeline.assignments.keys(), key=my_sort)
+
+	global rowcount
+	global html_output
+	if (rowcount % 2) == 1:
+		html_output += "<tr bgcolor=\"silver\" valign=\"top\">\n"
+	else:
+		html_output += "<tr valign=\"top\">\n"
+
+	html_output += "<td valign=\"middle\">t = " + str(pipeline.timestamp) + " ns</td>"
+
+	for stage in stages:
+		html_output += "<td>" + pipeline.pc['PC_' + stage]
+		if len(pipeline.assignments) > 0:
+			html_output += "<br><br>"
+			for varname in pipeline.assignments[stage].iterkeys():
+				print varname + " = " + pipeline.assignments[stage][varname] + "<br>"
+		html_output += "</td>\n"
+
+	html_output += "</tr>\n"
+
+	rowcount += 1
+
+def finalyze_drawing(pipeline):
+
+	result = open(result_file_name, "w")
+	result.write("""<html>
+<body>
+<table border="1">
+<tr>
+<th>Time</th>
+""")
+	stages = sorted(pipeline.assignments.keys(), key=my_sort)
+
+	for stage in stages:
+		result.write("<th>" + stage + "</th>\n")
+
+	result.write("</tr>\n")
+
+	result.write(html_output)
+
+	result.write("""</table>
+</body>
+</html>""")
+
+def render_dot(pipeline):
+	print "Dot renderer is not implemented yet!"
+
+def generateDrawing(pipeline):
+	if str(args.renderengine) == 'html':
+		render_html(pipeline)
+	elif str(args.renderengine) == 'dot':
+		render_dot(pipeline)
+	else:
+		print "Rendering engine " + str(args.renderengine) + " not supported"
+		sys.exit(1)
+
+currentTime = 0
+previousPipeline = Pipeline()
+currentPipeline = Pipeline()
+rowcount = 0
+html_output = ''
+
+for line in input:
+	logline = LogLineParser(line)
+
+	if currentTime == 0:
+		previousTime = logline.getTimestamp()
+	else:
+		previousTime = currentTime
+
+	currentTime = logline.getTimestamp()
+
+	if currentTime < int(args.starttime):
+		continue
+
+	if currentTime != previousTime:
+		if not currentPipeline.isEmpty():
+			generateDrawing(currentPipeline)
+			previousPipeline = currentPipeline
+			currentPipeline = Pipeline()
+		if currentTime > int(args.endtime):
+			break
+
+	currentPipeline.addInformation(logline)
+
+#	print logline.getAction()
+
+
+finalyze_drawing(previousPipeline)
+
+print "result has been written to " + result_file_name
