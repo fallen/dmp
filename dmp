@@ -8,11 +8,11 @@
 import sys, argparse, pydot
 
 parser = argparse.ArgumentParser(description='Draw Me a Pipeline')
-parser.add_argument('datafile')
-parser.add_argument('--tofile', default=None)
-parser.add_argument('--starttime', default=0)
-parser.add_argument('--endtime', default=10)
-parser.add_argument('--renderengine', default='html', choices=['html', 'dot'])
+parser.add_argument('datafile', help='Name of the file containing data to be processed')
+parser.add_argument('--tofile', default=None, help='Name of the file where the output will be written')
+parser.add_argument('--starttime', default=0, help='dmp will start analyzing input data when this timestamp is reached')
+parser.add_argument('--endtime', default=10, help='dmp will stop analyzing input data when this timestamp is reached')
+parser.add_argument('--renderengine', default='html', choices=['html', 'dot'], help='Format of the output file. For now it is either html or dot')
 
 args = parser.parse_args()
 
